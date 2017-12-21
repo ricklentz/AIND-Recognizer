@@ -142,32 +142,30 @@ class SelectorCV(ModelSelector):
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
-        kfold_splits = 4
-        best_score = float('-inf')
-        best_model = self.base_model(self.n_constant)
 
-        for component_state in range(self.min_n_components, self.max_n_components+1):
-            mean_scores = []
-            curr_model = None
-            
-            if len(self.sequences) < kfold_splits:
-                break
-            split_method = KFold(kfold_splits, random_state=self.random_state, shuffle=False)
-            for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
-                X_train, lengths_train = combine_sequences(cv_train_idx, self.sequences)
-                X_test, lengths_test = combine_sequences(cv_test_idx, self.sequences)
-                try:
-                    curr_model = GaussianHMM(n_components=component_state, n_iter=1000).fit(X_train, lengths_train)
-                    logL = curr_model.score(X_test, lengths_test)
-                    mean_scores.append(logL)
-                except:
-                    pass
-            if len(mean_scores) > 0 : 
-                avg_score = np.average(mean_scores)
-            else :
-                avg_score = float('-inf')
-            if avg_score > best_score : 
-                best_score, best_model = avg_score, curr_model
+        mean_scores = []
 
-        return best_model
+        # Save reference to 'KFold' in variable as shown in notebook
+        split_method = KFold()
+        try:
+            for n_component in range(self.min_n_components, self.max_n_components + 1):
+                model = self.base_model(n_component)
 
+                # Fold and calculate model mean scores
+                fold_scores = []
+                for _, test_idx in split_method.split(self.sequences):
+
+                    # Get test sequences
+                    test_X, test_length = combine_sequences(test_idx, self.sequences)
+                    
+                    # Record each model score
+                    fold_scores.append(model.score(test_X, test_length))
+
+                # Compute mean of all fold scores
+                mean_scores.append(np.mean(fold_scores))
+        except Exception as e:
+            pass
+
+        num_components = range(self.min_n_components, self.max_n_components + 1)
+        states = num_components[np.argmax(mean_scores)] if mean_scores else self.n_constant
+        return self.base_model(states)
